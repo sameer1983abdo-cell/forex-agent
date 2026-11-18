@@ -2,8 +2,8 @@ name: Hourly Forex Scanner
 
 on:
   schedule:
-    - cron: '0 * * * *' # تشغيل السكربت تلقائياً مع بداية كل ساعة
-  workflow_dispatch: # يتيح لك تشغيله يدوياً متى شئت للترتيب
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 jobs:
   run-scanner:
@@ -26,3 +26,11 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           python multi_asset_scanner.py
+
+      - name: Push updated signal to GitHub
+        run: |
+          git config --global user.name "Forex Bot"
+          git config --global user.email "bot@forex.local"
+          git add signal.json
+          git commit -m "Update trading signal" || exit 0
+          git push
