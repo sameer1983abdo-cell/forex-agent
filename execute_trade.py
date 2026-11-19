@@ -9,6 +9,7 @@ SIGNAL_URL = (
     "forex-agent/refs/heads/main/signal.json"
 )
 STATE_FILE = "last_executed_signal.json"
+DEFAULT_VOLUME_LOTS = 0.01
 
 
 def fetch_signal(url: str) -> dict:
@@ -18,32 +19,50 @@ def fetch_signal(url: str) -> dict:
     return json.loads(raw_text)
 
 
-def build_signal_fingerprint(data: dict) -> str:
-    """ينشئ بصمة فريدة ثابتة لمحتوى الإشارة لمنع تكرار تنفيذها."""
+def build_signal_identifier(data: dict) -> str:
+    """يستخدم حقل id إن وُجد، وإلا يبني بصمة ثابتة من كامل بيانات الإشارة."""
+    signal_id = str(data.get("id", "")).strip()
+    if signal_id:
+        return signal_id
     normalized = json.dumps(data, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-def load_last_fingerprint(path: str) -> str | None:
-    """يقرأ بصمة آخر إشارة تم تسجيلها سابقاً إن وُجد ملف الحالة."""
+def load_last_signal_id(path: str) -> str | None:
+    """يقرأ معرّف آخر إشارة تم تسجيلها سابقاً إن وُجد ملف الحالة."""
     if not os.path.exists(path):
         return None
     try:
         with open(path, "r", encoding="utf-8") as f:
             state = json.load(f)
-        return state.get("fingerprint")
+        return state.get("signal_id")
     except (json.JSONDecodeError, OSError):
         return None
 
 
-def save_executed_fingerprint(path: str, fingerprint: str, signal_data: dict) -> None:
-    """يحفظ بصمة الإشارة المنفّذة وبياناتها في ملف الحالة."""
+def save_executed_signal(path: str, signal_id: str, signal_data: dict) -> None:
+    """يحفظ معرّف الإشارة المنفّذة وبياناتها في ملف الحالة."""
     payload = {
-        "fingerprint": fingerprint,
+        "signal_id": signal_id,
         "signal": signal_data,
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
+
+
+def parse_scanner_signal(data: dict) -> dict:
+    """يستخرج الحقول الأساسية التي يكتبها multi_asset_scanner.py."""
+    asset = str(data.get("asset", "")).strip().upper()
+    action = str(data.get("action", "")).strip().upper()
+    sl_pips = data.get("sl_pips")
+    tp_pips = data.get("tp_pips")
+    return {
+        "asset": asset,
+        "action": action,
+        "sl_pips": sl_pips,
+        "tp_pips": tp_pips,
+        "volume_lots": DEFAULT_VOLUME_LOTS,
+    }
 
 
 def main() -> None:
@@ -51,25 +70,26 @@ def main() -> None:
     data = fetch_signal(SIGNAL_URL)
 
     status = str(data.get("status", "")).strip().upper()
-    print(f"حالة الإشارة الحالية: {status or 'غير محددة'}")
-
     if status == "WAIT":
-        print("لا توجد إشارة تنفيذ الآن (الوضع WAIT). سيتم الانتظار للدورة القادمة.")
+        print("الحالة الحالية WAIT: لا توجد إشارة تنفيذ الآن.")
         return
 
-    fingerprint = build_signal_fingerprint(data)
-    last_fingerprint = load_last_fingerprint(STATE_FILE)
+    signal_id = build_signal_identifier(data)
+    last_id = load_last_signal_id(STATE_FILE)
 
-    if last_fingerprint and fingerprint == last_fingerprint:
-        print("تم رصد إشارة مطابقة لآخر إشارة تم التعامل معها مسبقاً. تم تجاهل التكرار.")
+    if last_id and signal_id == last_id:
+        print(f"الإشارة رقم ({signal_id}) تم التعامل معها مسبقاً. تم تجاهل التكرار.")
         return
 
-    print("تم رصد إشارة جديدة غير مكررة:")
-    print(json.dumps(data, ensure_ascii=False, indent=2))
-    print(f"بصمة الإشارة (Fingerprint): {fingerprint[:12]}...")
+    details = parse_scanner_signal(data)
+    print("تم رصد إشارة جديدة:")
+    print(
+        f"ID: {signal_id} | الأصل: {details['asset']} | الاتجاه: {details['action']} "
+        f"| SL: {details['sl_pips']} pips | TP: {details['tp_pips']} pips | الحجم: {details['volume_lots']} lot"
+    )
 
-    save_executed_fingerprint(STATE_FILE, fingerprint, data)
-    print(f"تم تسجيل بصمة الإشارة في {STATE_FILE}.")
+    save_executed_signal(STATE_FILE, signal_id, data)
+    print(f"تم حفظ حالة الإشارة في {STATE_FILE}.")
 
     has_client_id = bool(os.getenv("CTRADER_CLIENT_ID"))
     has_client_secret = bool(os.getenv("CTRADER_CLIENT_SECRET"))
