@@ -1,0 +1,37 @@
+name: Weekly Strategy Tuner
+
+on:
+  schedule:
+    # يعمل مرة أسبوعياً يوم الأحد الساعة 02:00 UTC
+    - cron: "0 2 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run weekly strategy tuner
+        run: python tune_strategy.py
+
+      - name: Commit updated strategy config if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add strategy_config.json
+          if git diff --staged --quiet; then
+            echo "لا توجد تغييرات جديدة على strategy_config.json."
+          else
+            git commit -m "Tune demo strategy parameters"
+            git push
+          fi
