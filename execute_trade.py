@@ -3,7 +3,10 @@ import os
 import urllib.request
 
 
-SIGNAL_URL = "https://raw.githubusercontent.com/sameer1983abdo-cell/forex-agent/refs/heads/main/signal.json"
+SIGNAL_URL = (
+    "https://raw.githubusercontent.com/sameer1983abdo-cell/"
+    "forex-agent/refs/heads/main/signal.json"
+)
 
 
 def fetch_signal(url: str) -> dict:
@@ -14,12 +17,19 @@ def fetch_signal(url: str) -> dict:
 
 
 def main() -> None:
-    print("بدء قراءة ملف الإشارات السحابية...")
+    print("بدء فحص ملف الإشارات السحابية...")
     data = fetch_signal(SIGNAL_URL)
-    print("تمت قراءة البيانات بنجاح:")
+
+    status = str(data.get("status", "")).strip().upper()
+    print(f"حالة الإشارة الحالية: {status or 'غير محددة'}")
+
+    if status == "WAIT":
+        print("لا توجد إشارة تنفيذ الآن (الوضع WAIT). سيتم الانتظار للدورة القادمة.")
+        return
+
+    print("تم رصد بيانات غير WAIT في signal.json:")
     print(json.dumps(data, ensure_ascii=False, indent=2))
 
-    # فحص وجود متغيرات البيئة المخزنة في GitHub Secrets (سنستخدمها في الخطوات القادمة)
     has_client_id = bool(os.getenv("CTRADER_CLIENT_ID"))
     has_client_secret = bool(os.getenv("CTRADER_CLIENT_SECRET"))
     print(f"حالة CTRADER_CLIENT_ID: {'موجود' if has_client_id else 'غير موجود'}")
