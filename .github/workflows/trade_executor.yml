@@ -1,0 +1,33 @@
+name: Trade Executor
+
+on:
+  schedule:
+    # يعمل تلقائياً كل 5 دقائق
+    - cron: "*/5 * * * *"
+  # يتيح لك تشغيله يدوياً بزر Run workflow متى أردت الاختبار
+  workflow_dispatch:
+
+jobs:
+  execute-trade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run trade execution script
+        env:
+          CTRADER_CLIENT_ID: ${{ secrets.CTRADER_CLIENT_ID }}
+          CTRADER_CLIENT_SECRET: ${{ secrets.CTRADER_CLIENT_SECRET }}
+        run: python execute_trade.py
