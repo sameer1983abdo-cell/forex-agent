@@ -36,6 +36,16 @@ def load_last_fingerprint(path: str) -> str | None:
         return None
 
 
+def save_executed_fingerprint(path: str, fingerprint: str, signal_data: dict) -> None:
+    """يحفظ بصمة الإشارة المنفّذة وبياناتها في ملف الحالة."""
+    payload = {
+        "fingerprint": fingerprint,
+        "signal": signal_data,
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+
 def main() -> None:
     print("بدء فحص ملف الإشارات السحابية...")
     data = fetch_signal(SIGNAL_URL)
@@ -57,6 +67,9 @@ def main() -> None:
     print("تم رصد إشارة جديدة غير مكررة:")
     print(json.dumps(data, ensure_ascii=False, indent=2))
     print(f"بصمة الإشارة (Fingerprint): {fingerprint[:12]}...")
+
+    save_executed_fingerprint(STATE_FILE, fingerprint, data)
+    print(f"تم تسجيل بصمة الإشارة في {STATE_FILE}.")
 
     has_client_id = bool(os.getenv("CTRADER_CLIENT_ID"))
     has_client_secret = bool(os.getenv("CTRADER_CLIENT_SECRET"))
