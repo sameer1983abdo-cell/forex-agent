@@ -10,6 +10,8 @@ SIGNAL_URL = (
 )
 STATE_FILE = "last_executed_signal.json"
 DEFAULT_VOLUME_LOTS = 0.01
+# في أزواج الفوركس القياسية: 1 لوت قياسي = 100,000 وحدة، وفي cTrader Open API يُضرب في 100 (سنتات الحجم) -> 0.01 لوت = 1000
+CTRADER_VOLUME_MULTIPLIER = 100_000
 
 
 def fetch_signal(url: str) -> dict:
@@ -65,6 +67,21 @@ def parse_scanner_signal(data: dict) -> dict:
     }
 
 
+def prepare_ctrader_order_payload(details: dict) -> dict:
+    """يجهّز قيم الأمر بصيغة مناسبة لـ cTrader Open API دون إرسال فعلي بعد."""
+    action = details["action"]
+    lots = float(details["volume_lots"])
+    ctrader_volume = int(round(lots * CTRADER_VOLUME_MULTIPLIER))
+    return {
+        "symbol_name": details["asset"],
+        "trade_side": action,
+        "lots": lots,
+        "ctrader_volume": ctrader_volume,
+        "sl_pips": details["sl_pips"],
+        "tp_pips": details["tp_pips"],
+    }
+
+
 def main() -> None:
     print("بدء فحص ملف الإشارات السحابية...")
     data = fetch_signal(SIGNAL_URL)
@@ -82,19 +99,20 @@ def main() -> None:
         return
 
     details = parse_scanner_signal(data)
-    print("تم رصد إشارة جديدة:")
-    print(
-        f"ID: {signal_id} | الأصل: {details['asset']} | الاتجاه: {details['action']} "
-        f"| SL: {details['sl_pips']} pips | TP: {details['tp_pips']} pips | الحجم: {details['volume_lots']} lot"
-    )
+    order_preview = prepare_ctrader_order_payload(details)
+
+    print("تم رصد إشارة جديدة وتجهيز معاينة الأمر:")
+    print(json.dumps(order_preview, ensure_ascii=False, indent=2))
 
     save_executed_signal(STATE_FILE, signal_id, data)
     print(f"تم حفظ حالة الإشارة في {STATE_FILE}.")
 
     has_client_id = bool(os.getenv("CTRADER_CLIENT_ID"))
     has_client_secret = bool(os.getenv("CTRADER_CLIENT_SECRET"))
+    has_access_token = bool(os.getenv("CTRADER_ACCESS_TOKEN"))
     print(f"حالة CTRADER_CLIENT_ID: {'موجود' if has_client_id else 'غير موجود'}")
     print(f"حالة CTRADER_CLIENT_SECRET: {'موجود' if has_client_secret else 'غير موجود'}")
+    print(f"حالة CTRADER_ACCESS_TOKEN: {'موجود' if has_access_token else 'غير موجود بعد'}")
 
 
 if __name__ == "__main__":
