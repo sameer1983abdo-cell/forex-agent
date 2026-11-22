@@ -8,7 +8,7 @@
     "USDJPY"
   ],
   "default_sl_pips": 30.0,
-  "default_tp_pips": 60.0,
+  "default_tp_pips": 40.0,
   "tuning": {
     "enabled": true,
     "schedule": "weekly",
