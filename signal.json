@@ -1,1 +1,7 @@
-{"status": "WAIT"}
+{
+    "id": "1795451166",
+    "asset": "GOLD",
+    "action": "BUY",
+    "sl_pips": 20,
+    "tp_pips": 40
+}
