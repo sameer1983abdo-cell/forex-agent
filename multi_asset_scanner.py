@@ -64,5 +64,6 @@ def analyze_market():
             save_signal_to_cloud(name, "SELL", item["sl"], item["tp"])
             break
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     analyze_market()
+
