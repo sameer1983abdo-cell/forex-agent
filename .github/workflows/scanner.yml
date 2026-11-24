@@ -21,20 +21,24 @@ jobs:
           python-version: '3.10'
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
-      - name: Run scanner script
+      - name: Run multi-asset scanner
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: |
-          python multi_asset_scanner.py
+        run: python multi_asset_scanner.py
 
-      - name: Push updated signal to GitHub
+      - name: Execute trade on new signal
+        env:
+          CTRADER_CLIENT_ID: ${{ secrets.CTRADER_CLIENT_ID }}
+          CTRADER_CLIENT_SECRET: ${{ secrets.CTRADER_CLIENT_SECRET }}
+          CTRADER_ACCESS_TOKEN: ${{ secrets.CTRADER_ACCESS_TOKEN }}
+          CTRADER_ACCOUNT_ID: ${{ secrets.CTRADER_ACCOUNT_ID }}
+        run: python execute_trade.py
+
+      - name: Push updated files to GitHub
         run: |
-          git config --global user.name "Forex Bot"
-          git config --global user.email "bot@forex.local"
-          git add signal.json
-          git commit -m "Update trading signal" || exit 0
-          git pull --rebase origin main || true
-          git push
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add signal.json last_executed_signal.json || git add signal.json
+          git diff --staged --quiet || (git commit -m "Update signal and execution state" && git push)
