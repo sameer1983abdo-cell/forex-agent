@@ -214,4 +214,116 @@ def execute_on_ctrader_demo(order_info: dict, creds: dict) -> bool:
             )
             client.send(order_req)
 
-        elif payload_type == ProtoOAExecutionEvent().
+        elif payload_type == ProtoOAExecutionEvent().payloadType:
+            exec_ev = Protobuf.extract(msg)
+            exec_type_name = str(getattr(exec_ev, "executionType", ""))
+            if exec_ev.HasField("order") and exec_ev.order.HasField("orderStatus"):
+                print(
+                    f"تحديث تنفيذ من cTrader: executionType={exec_type_name}, "
+                    f"orderId={exec_ev.order.orderId}"
+                )
+            if exec_ev.HasField("position") and exec_ev.position.positionId:
+                finish(
+                    True,
+                    f"تم فتح الصفقة بنجاح على الحساب التجريبي! رقم الصفقة (Position ID): {exec_ev.position.positionId}",
+                )
+            elif "ORDER_ACCEPTED" in exec_type_name or "ORDER_FILLED" in exec_type_name:
+                finish(True, "تم قبول/تنفيذ الأمر على الحساب التجريبي بنجاح.")
+
+    def on_connected(_client) -> None:
+        print("تم الاتصال بخادم cTrader التجريبي. جاري توثيق التطبيق...")
+        if not heartbeat_loop.running:
+            heartbeat_loop.start(25, now=False)
+        app_req = ProtoOAApplicationAuthReq()
+        app_req.clientId = creds["client_id"]
+        app_req.clientSecret = creds["client_secret"]
+        client.send(app_req)
+
+    def on_disconnected(_client, reason) -> None:
+        if not state["done"]:
+            finish(False, f"انقطع الاتصال بخادم cTrader: {reason}")
+
+    client.setConnectedCallback(on_connected)
+    client.setDisconnectedCallback(on_disconnected)
+    client.setMessageReceivedCallback(on_message)
+
+    reactor.callLater(EXECUTION_TIMEOUT_SECONDS, lambda: finish(False, "انتهت مهلة انتظار رد cTrader API."))
+    client.startService()
+    reactor.run()
+    return state["success"]
+
+
+def main() -> None:
+    print("بدء فحص ملف الإشارات السحابية...")
+    config = load_strategy_config(CONFIG_FILE)
+    data = fetch_signal(SIGNAL_URL)
+
+    if str(data.get("status", "")).strip().upper() == "WAIT":
+        print("الحالة الحالية WAIT: لا توجد إشارة تنفيذ الآن.")
+        return
+
+    signal_id = get_signal_id(data)
+    if load_last_id(STATE_FILE) == signal_id:
+        print(f"الإشارة ({signal_id}) تم التعامل معها مسبقاً. تم تجاهل التكرار.")
+        return
+
+    action = str(data.get("action", "")).strip().upper()
+    symbol_name = str(data.get("asset", "")).strip().upper()
+    if action not in {"BUY", "SELL"} or not symbol_name:
+        print("بيانات الإشارة غير مكتملة أو غير صالحة للتنفيذ.")
+        return
+
+    lots = float(config["volume_lots"])
+    sl_pips = data.get("sl_pips") if data.get("sl_pips") is not None else config["default_sl_pips"]
+    tp_pips = data.get("tp_pips") if data.get("tp_pips") is not None else config["default_tp_pips"]
+
+    order_preview = {
+        "symbol_name": symbol_name,
+        "trade_side": action,
+        "lots": lots,
+        "ctrader_volume": int(round(lots * CTRADER_VOLUME_MULTIPLIER)),
+        "sl_pips": sl_pips,
+        "tp_pips": tp_pips,
+    }
+    print("إشارة جديدة جاهزة:")
+    print(json.dumps(order_preview, ensure_ascii=False, indent=2))
+
+    client_id = os.getenv("CTRADER_CLIENT_ID", "").strip()
+    client_secret = os.getenv("CTRADER_CLIENT_SECRET", "").strip()
+    access_token = os.getenv("CTRADER_ACCESS_TOKEN", "").strip()
+    account_id_raw = os.getenv("CTRADER_ACCOUNT_ID", "").strip()
+
+    print("CTRADER_CLIENT_ID:", "موجود" if client_id else "غير موجود")
+    print("CTRADER_CLIENT_SECRET:", "موجود" if client_secret else "غير موجود")
+    print("CTRADER_ACCESS_TOKEN:", "موجود" if access_token else "غير موجود بعد")
+    print("CTRADER_ACCOUNT_ID:", "موجود" if account_id_raw else "غير موجود")
+
+    if not (client_id and client_secret and access_token and account_id_raw):
+        print("تعذّر التنفيذ: أحد متغيرات cTrader المطلوبة غير مضبوط.")
+        return
+
+    try:
+        account_id = int(account_id_raw)
+    except ValueError:
+        print("تعذّر التنفيذ: CTRADER_ACCOUNT_ID يجب أن يكون رقماً صحيحاً.")
+        return
+
+    executed = execute_on_ctrader_demo(
+        order_preview,
+        {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "access_token": access_token,
+            "account_id": account_id,
+        },
+    )
+
+    if executed:
+        save_last_id(STATE_FILE, signal_id, data)
+        print(f"تم حفظ حالة الإشارة ({signal_id}) بنجاح.")
+    else:
+        print("لم يكتمل تنفيذ الصفقة؛ لن يتم تسجيل الإشارة كمنفّذة.")
+
+
+if __name__ == "__main__":
+    main()
