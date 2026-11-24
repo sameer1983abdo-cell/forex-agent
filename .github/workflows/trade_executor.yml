@@ -2,6 +2,10 @@ name: Trade Executor
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Hourly Forex Scanner"]
+    types:
+      - completed
   schedule:
     - cron: "5,20,35,50 * * * *"
 
