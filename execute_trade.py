@@ -153,9 +153,10 @@ def execute_on_ctrader_demo(order_info: dict, creds: dict) -> bool:
             if order_info["trade_side"] == "BUY"
             else ProtoOATradeSide.SELL
         )
-        # في cTrader Open API، relativeStopLoss و relativeTakeProfit تُقاس بـ 1/10 من الـ pip (أي 10 وحدات لكل pip)
-        sl_points = int(round(float(order_info["sl_pips"]) * 10))
-        tp_points = int(round(float(order_info["tp_pips"]) * 10))
+        # في cTrader Open API، دقة relativeStopLoss و relativeTakeProfit تطابق 10 ** pipPosition
+        scale = 10 ** state["pip_position"]
+        sl_units = int(round(float(order_info["sl_pips"]) * (scale / 100)))
+        tp_units = int(round(float(order_info["tp_pips"]) * (scale / 100)))
 
         order_req = ProtoOANewOrderReq()
         order_req.ctidTraderAccountId = creds["account_id"]
@@ -164,16 +165,16 @@ def execute_on_ctrader_demo(order_info: dict, creds: dict) -> bool:
         order_req.tradeSide = side
         order_req.volume = int(order_info["ctrader_volume"])
         order_req.comment = "forex-agent-demo"
-        if sl_points > 0:
-            order_req.relativeStopLoss = sl_points
-        if tp_points > 0:
-            order_req.relativeTakeProfit = tp_points
+        if sl_units > 0:
+            order_req.relativeStopLoss = sl_units
+        if tp_units > 0:
+            order_req.relativeTakeProfit = tp_units
 
         state["order_sent"] = True
         print(
             f"إرسال أمر {order_info['trade_side']} للرمز {state['symbol_name']} "
             f"(ID: {state['symbol_id']}) بحجم {order_info['ctrader_volume']} "
-            f"(SL points={sl_points}, TP points={tp_points})..."
+            f"(SL units={sl_units}, TP units={tp_units})..."
         )
         client.send(order_req)
 
