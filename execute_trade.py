@@ -20,6 +20,7 @@ from ctrader_open_api.messages.OpenApiModelMessages_pb2 import (
     ProtoOAOrderType,
     ProtoOATradeSide,
 )
+from ctrader_open_api.tcpProtocol import TcpProtocol
 from twisted.internet import reactor, task
 
 SIGNAL_URL = (
@@ -123,7 +124,7 @@ def execute_on_ctrader_demo(order_info: dict, creds: dict) -> bool:
         "symbol_id": None,
         "pip_position": 4,
     }
-    client = Client(EndPoints.PROTOBUF_DEMO_HOST, get_protobuf_port(), Protobuf)
+    client = Client(EndPoints.PROTOBUF_DEMO_HOST, get_protobuf_port(), TcpProtocol)
     heartbeat_loop = task.LoopingCall(
         lambda: client.send(ProtoHeartbeatEvent())
     )
