@@ -13,8 +13,8 @@ from ctrader_open_api.messages.OpenApiMessages_pb2 import (
     ProtoOAErrorRes,
     ProtoOAExecutionEvent,
     ProtoOANewOrderReq,
-    ProtoOASymbolsForLightSymbolListReq,
-    ProtoOASymbolsForLightSymbolListRes,
+    ProtoOASymbolsListReq,
+    ProtoOASymbolsListRes,
 )
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import (
     ProtoOAOrderType,
@@ -157,11 +157,11 @@ def execute_on_ctrader_demo(order_info: dict, creds: dict) -> bool:
                 return
             state["account_authorized"] = True
             print(f"تمت المصادقة على الحساب التجريبي ({creds['account_id']}). جاري جلب الرموز...")
-            sym_req = ProtoOASymbolsForLightSymbolListReq()
+            sym_req = ProtoOASymbolsListReq()
             sym_req.ctidTraderAccountId = creds["account_id"]
             client.send(sym_req)
 
-        elif payload_type == ProtoOASymbolsForLightSymbolListRes().payloadType:
+        elif payload_type == ProtoOASymbolsListRes().payloadType:
             if not state["account_authorized"] or state["order_sent"]:
                 return
             res = Protobuf.extract(msg)
