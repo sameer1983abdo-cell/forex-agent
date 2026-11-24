@@ -24,9 +24,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --no-cache-dir urllib3 Twisted protobuf ctrader-open-api
+          pip install --no-cache-dir urllib3 protobuf service_identity "Twisted[tls]" "pyOpenSSL>=24.0.0" "cryptography>=42.0.0" ctrader-open-api
           python -c "import ctrader_open_api; print('ctrader_open_api import OK')"
-          pip install --no-cache-dir urllib3 Twisted protobuf service_identity ctrader-open-api
+
       - name: Run trade executor
         env:
           CTRADER_CLIENT_ID: ${{ secrets.CTRADER_CLIENT_ID }}
