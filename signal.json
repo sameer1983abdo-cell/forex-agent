@@ -1,7 +1,7 @@
 {
-    "id": "1795540241",
+    "id": "1795554858",
     "asset": "GOLD",
-    "action": "BUY",
+    "action": "SELL",
     "sl_pips": 20,
     "tp_pips": 40
 }
