@@ -34,6 +34,7 @@ CONFIG_FILE = "strategy_config.json"
 STATE_FILE = "last_executed_signal.json"
 DEFAULT_VOLUME_LOTS = 0.01
 CTRADER_VOLUME_MULTIPLIER = 100_000
+CTRADER_PRICE_SCALE = 100_000
 EXECUTION_TIMEOUT_SECONDS = 40
 
 
@@ -153,10 +154,11 @@ def execute_on_ctrader_demo(order_info: dict, creds: dict) -> bool:
             if order_info["trade_side"] == "BUY"
             else ProtoOATradeSide.SELL
         )
-        # في cTrader Open API، دقة relativeStopLoss و relativeTakeProfit تطابق 10 ** pipPosition
-        scale = 10 ** state["pip_position"]
-        sl_units = int(round(float(order_info["sl_pips"]) * (scale / 100)))
-        tp_units = int(round(float(order_info["tp_pips"]) * (scale / 100)))
+        pip_size = 10 ** (-state["pip_position"])
+        sl_price_dist = float(order_info["sl_pips"]) * pip_size
+        tp_price_dist = float(order_info["tp_pips"]) * pip_size
+        sl_rel = int(round(sl_price_dist * CTRADER_PRICE_SCALE))
+        tp_rel = int(round(tp_price_dist * CTRADER_PRICE_SCALE))
 
         order_req = ProtoOANewOrderReq()
         order_req.ctidTraderAccountId = creds["account_id"]
@@ -165,16 +167,16 @@ def execute_on_ctrader_demo(order_info: dict, creds: dict) -> bool:
         order_req.tradeSide = side
         order_req.volume = int(order_info["ctrader_volume"])
         order_req.comment = "forex-agent-demo"
-        if sl_units > 0:
-            order_req.relativeStopLoss = sl_units
-        if tp_units > 0:
-            order_req.relativeTakeProfit = tp_units
+        if sl_rel > 0:
+            order_req.relativeStopLoss = sl_rel
+        if tp_rel > 0:
+            order_req.relativeTakeProfit = tp_rel
 
         state["order_sent"] = True
         print(
             f"إرسال أمر {order_info['trade_side']} للرمز {state['symbol_name']} "
             f"(ID: {state['symbol_id']}) بحجم {order_info['ctrader_volume']} "
-            f"(SL units={sl_units}, TP units={tp_units})..."
+            f"(relativeSL={sl_rel}, relativeTP={tp_rel})..."
         )
         client.send(order_req)
 
