@@ -13,6 +13,9 @@ from ctrader_open_api.messages.OpenApiMessages_pb2 import (
     ProtoOAErrorRes,
     ProtoOAExecutionEvent,
     ProtoOANewOrderReq,
+    ProtoOAOrderErrorEvent,
+    ProtoOASymbolByIdReq,
+    ProtoOASymbolByIdRes,
     ProtoOASymbolsListReq,
     ProtoOASymbolsListRes,
 )
@@ -31,7 +34,7 @@ CONFIG_FILE = "strategy_config.json"
 STATE_FILE = "last_executed_signal.json"
 DEFAULT_VOLUME_LOTS = 0.01
 CTRADER_VOLUME_MULTIPLIER = 100_000
-EXECUTION_TIMEOUT_SECONDS = 35
+EXECUTION_TIMEOUT_SECONDS = 40
 
 
 def load_strategy_config(path: str) -> dict:
@@ -122,7 +125,8 @@ def execute_on_ctrader_demo(order_info: dict, creds: dict) -> bool:
         "account_authorized": False,
         "order_sent": False,
         "symbol_id": None,
-        "pip_position": 4,
+        "symbol_name": order_info["symbol_name"],
+        "pip_position": 2,
     }
     client = Client(EndPoints.PROTOBUF_DEMO_HOST, get_protobuf_port(), TcpProtocol)
     heartbeat_loop = task.LoopingCall(
@@ -141,6 +145,38 @@ def execute_on_ctrader_demo(order_info: dict, creds: dict) -> bool:
         if reactor.running:
             reactor.callLater(0.2, reactor.stop)
 
+    def send_market_order() -> None:
+        if state["order_sent"] or state["symbol_id"] is None:
+            return
+        side = (
+            ProtoOATradeSide.BUY
+            if order_info["trade_side"] == "BUY"
+            else ProtoOATradeSide.SELL
+        )
+        # في cTrader Open API، relativeStopLoss و relativeTakeProfit تُقاس بـ 1/10 من الـ pip (أي 10 وحدات لكل pip)
+        sl_points = int(round(float(order_info["sl_pips"]) * 10))
+        tp_points = int(round(float(order_info["tp_pips"]) * 10))
+
+        order_req = ProtoOANewOrderReq()
+        order_req.ctidTraderAccountId = creds["account_id"]
+        order_req.symbolId = state["symbol_id"]
+        order_req.orderType = ProtoOAOrderType.MARKET
+        order_req.tradeSide = side
+        order_req.volume = int(order_info["ctrader_volume"])
+        order_req.comment = "forex-agent-demo"
+        if sl_points > 0:
+            order_req.relativeStopLoss = sl_points
+        if tp_points > 0:
+            order_req.relativeTakeProfit = tp_points
+
+        state["order_sent"] = True
+        print(
+            f"إرسال أمر {order_info['trade_side']} للرمز {state['symbol_name']} "
+            f"(ID: {state['symbol_id']}) بحجم {order_info['ctrader_volume']} "
+            f"(SL points={sl_points}, TP points={tp_points})..."
+        )
+        client.send(order_req)
+
     def on_message(_client, msg) -> None:
         payload_type = msg.payloadType
 
@@ -149,6 +185,14 @@ def execute_on_ctrader_demo(order_info: dict, creds: dict) -> bool:
             finish(
                 False,
                 f"خطأ من cTrader API [{err.errorCode}]: {err.description}",
+            )
+            return
+
+        if payload_type == ProtoOAOrderErrorEvent().payloadType:
+            oerr = Protobuf.extract(msg)
+            finish(
+                False,
+                f"خطأ في تنفيذ الأمر [{getattr(oerr, 'errorCode', 'ORDER_ERROR')}]: {getattr(oerr, 'description', str(oerr))}",
             )
             return
 
@@ -183,53 +227,54 @@ def execute_on_ctrader_demo(order_info: dict, creds: dict) -> bool:
                 return
 
             state["symbol_id"] = int(matched.symbolId)
-            pip_pos = getattr(matched, "pipPosition", None)
-            if pip_pos is None or int(pip_pos) <= 0:
-                pip_pos = 2 if ("XAU" in str(matched.symbolName).upper() or "GOLD" in str(matched.symbolName).upper() or "JPY" in str(matched.symbolName).upper()) else 4
-            state["pip_position"] = int(pip_pos)
+            state["symbol_name"] = str(matched.symbolName)
+            print(f"تم العثور على الرمز {state['symbol_name']} (ID: {state['symbol_id']}). جاري جلب تفاصيل الرمز...")
+            detail_req = ProtoOASymbolByIdReq()
+            detail_req.ctidTraderAccountId = creds["account_id"]
+            detail_req.symbolId.append(state["symbol_id"])
+            client.send(detail_req)
 
-            side = (
-                ProtoOATradeSide.BUY
-                if order_info["trade_side"] == "BUY"
-                else ProtoOATradeSide.SELL
-            )
-            pip_size = 10 ** (-state["pip_position"])
-            sl_distance = float(order_info["sl_pips"]) * pip_size
-            tp_distance = float(order_info["tp_pips"]) * pip_size
-
-            order_req = ProtoOANewOrderReq()
-            order_req.ctidTraderAccountId = creds["account_id"]
-            order_req.symbolId = state["symbol_id"]
-            order_req.orderType = ProtoOAOrderType.MARKET
-            order_req.tradeSide = side
-            order_req.volume = int(order_info["ctrader_volume"])
-            order_req.comment = "forex-agent-demo"
-
-            order_req.relativeStopLoss = int(round(sl_distance / pip_size))
-            order_req.relativeTakeProfit = int(round(tp_distance / pip_size))
-
-            state["order_sent"] = True
-            print(
-                f"إرسال أمر {order_info['trade_side']} للرمز {matched.symbolName} "
-                f"(ID: {state['symbol_id']}) بحجم {order_info['ctrader_volume']}..."
-            )
-            client.send(order_req)
+        elif payload_type == ProtoOASymbolByIdRes().payloadType:
+            if state["order_sent"]:
+                return
+            res = Protobuf.extract(msg)
+            if res.symbol:
+                sym = res.symbol[0]
+                pip_pos = getattr(sym, "pipPosition", None)
+                if pip_pos:
+                    state["pip_position"] = int(pip_pos)
+                print(
+                    f"تفاصيل الرمز {state['symbol_name']}: "
+                    f"pipPosition={state['pip_position']}, "
+                    f"lotSize={getattr(sym, 'lotSize', 'N/A')}, "
+                    f"minVolume={getattr(sym, 'minVolume', 'N/A')}, "
+                    f"stepVolume={getattr(sym, 'stepVolume', 'N/A')}"
+                )
+            send_market_order()
 
         elif payload_type == ProtoOAExecutionEvent().payloadType:
             exec_ev = Protobuf.extract(msg)
             exec_type_name = str(getattr(exec_ev, "executionType", ""))
-            if exec_ev.HasField("order") and exec_ev.order.HasField("orderStatus"):
-                print(
-                    f"تحديث تنفيذ من cTrader: executionType={exec_type_name}, "
-                    f"orderId={exec_ev.order.orderId}"
-                )
-            if exec_ev.HasField("position") and exec_ev.position.positionId:
+            order_status = (
+                str(getattr(exec_ev.order, "orderStatus", ""))
+                if exec_ev.HasField("order")
+                else ""
+            )
+            order_id = exec_ev.order.orderId if exec_ev.HasField("order") else None
+            pos_id = exec_ev.position.positionId if exec_ev.HasField("position") else None
+            print(
+                f"تحديث تنفيذ: executionType={exec_type_name}, "
+                f"orderStatus={order_status}, orderId={order_id}, positionId={pos_id}"
+            )
+            if pos_id:
                 finish(
                     True,
-                    f"تم فتح الصفقة بنجاح على الحساب التجريبي! رقم الصفقة (Position ID): {exec_ev.position.positionId}",
+                    f"تم فتح الصفقة بنجاح على الحساب التجريبي! رقم الصفقة (Position ID): {pos_id}",
                 )
-            elif "ORDER_ACCEPTED" in exec_type_name or "ORDER_FILLED" in exec_type_name:
+            elif "ORDER_FILLED" in exec_type_name or "ORDER_ACCEPTED" in exec_type_name:
                 finish(True, "تم قبول/تنفيذ الأمر على الحساب التجريبي بنجاح.")
+            elif "REJECTED" in exec_type_name or "CANCELLED" in exec_type_name or "EXPIRED" in exec_type_name:
+                finish(False, f"تم رفض/إلغاء الأمر من الخادم: {exec_type_name}")
 
     def on_connected(_client) -> None:
         print("تم الاتصال بخادم cTrader التجريبي. جاري توثيق التطبيق...")
