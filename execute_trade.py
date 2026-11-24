@@ -33,7 +33,6 @@ SIGNAL_URL = (
 CONFIG_FILE = "strategy_config.json"
 STATE_FILE = "last_executed_signal.json"
 DEFAULT_VOLUME_LOTS = 0.01
-CTRADER_VOLUME_MULTIPLIER = 100_000
 CTRADER_PRICE_SCALE = 100_000
 EXECUTION_TIMEOUT_SECONDS = 40
 
@@ -119,6 +118,18 @@ def get_protobuf_port() -> int:
     return 5035
 
 
+def calculate_api_volume(lots: float, lot_size: int, min_volume: int, step_volume: int) -> int:
+    raw_vol = lots * float(lot_size)
+    if step_volume > 0:
+        steps = max(1, int(round(raw_vol / float(step_volume))))
+        vol = steps * int(step_volume)
+    else:
+        vol = max(1, int(round(raw_vol)))
+    if min_volume > 0:
+        vol = max(vol, int(min_volume))
+    return vol
+
+
 def execute_on_ctrader_demo(order_info: dict, creds: dict) -> bool:
     state = {
         "done": False,
@@ -128,6 +139,9 @@ def execute_on_ctrader_demo(order_info: dict, creds: dict) -> bool:
         "symbol_id": None,
         "symbol_name": order_info["symbol_name"],
         "pip_position": 2,
+        "lot_size": 10000,
+        "min_volume": 100,
+        "step_volume": 100,
     }
     client = Client(EndPoints.PROTOBUF_DEMO_HOST, get_protobuf_port(), TcpProtocol)
     heartbeat_loop = task.LoopingCall(
@@ -154,6 +168,12 @@ def execute_on_ctrader_demo(order_info: dict, creds: dict) -> bool:
             if order_info["trade_side"] == "BUY"
             else ProtoOATradeSide.SELL
         )
+        api_volume = calculate_api_volume(
+            float(order_info["lots"]),
+            state["lot_size"],
+            state["min_volume"],
+            state["step_volume"],
+        )
         pip_size = 10 ** (-state["pip_position"])
         sl_price_dist = float(order_info["sl_pips"]) * pip_size
         tp_price_dist = float(order_info["tp_pips"]) * pip_size
@@ -165,7 +185,7 @@ def execute_on_ctrader_demo(order_info: dict, creds: dict) -> bool:
         order_req.symbolId = state["symbol_id"]
         order_req.orderType = ProtoOAOrderType.MARKET
         order_req.tradeSide = side
-        order_req.volume = int(order_info["ctrader_volume"])
+        order_req.volume = api_volume
         order_req.comment = "forex-agent-demo"
         if sl_rel > 0:
             order_req.relativeStopLoss = sl_rel
@@ -175,8 +195,8 @@ def execute_on_ctrader_demo(order_info: dict, creds: dict) -> bool:
         state["order_sent"] = True
         print(
             f"إرسال أمر {order_info['trade_side']} للرمز {state['symbol_name']} "
-            f"(ID: {state['symbol_id']}) بحجم {order_info['ctrader_volume']} "
-            f"(relativeSL={sl_rel}, relativeTP={tp_rel})..."
+            f"(ID: {state['symbol_id']}) بعدد لوتات {order_info['lots']} "
+            f"(cTrader volume={api_volume}, relativeSL={sl_rel}, relativeTP={tp_rel})..."
         )
         client.send(order_req)
 
@@ -243,15 +263,20 @@ def execute_on_ctrader_demo(order_info: dict, creds: dict) -> bool:
             res = Protobuf.extract(msg)
             if res.symbol:
                 sym = res.symbol[0]
-                pip_pos = getattr(sym, "pipPosition", None)
-                if pip_pos:
-                    state["pip_position"] = int(pip_pos)
+                if getattr(sym, "pipPosition", None):
+                    state["pip_position"] = int(sym.pipPosition)
+                if getattr(sym, "lotSize", None):
+                    state["lot_size"] = int(sym.lotSize)
+                if getattr(sym, "minVolume", None):
+                    state["min_volume"] = int(sym.minVolume)
+                if getattr(sym, "stepVolume", None):
+                    state["step_volume"] = int(sym.stepVolume)
                 print(
                     f"تفاصيل الرمز {state['symbol_name']}: "
                     f"pipPosition={state['pip_position']}, "
-                    f"lotSize={getattr(sym, 'lotSize', 'N/A')}, "
-                    f"minVolume={getattr(sym, 'minVolume', 'N/A')}, "
-                    f"stepVolume={getattr(sym, 'stepVolume', 'N/A')}"
+                    f"lotSize={state['lot_size']}, "
+                    f"minVolume={state['min_volume']}, "
+                    f"stepVolume={state['step_volume']}"
                 )
             send_market_order()
 
@@ -330,7 +355,6 @@ def main() -> None:
         "symbol_name": symbol_name,
         "trade_side": action,
         "lots": lots,
-        "ctrader_volume": int(round(lots * CTRADER_VOLUME_MULTIPLIER)),
         "sl_pips": sl_pips,
         "tp_pips": tp_pips,
     }
