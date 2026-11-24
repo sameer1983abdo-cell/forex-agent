@@ -2,6 +2,8 @@ import os
 from ctrader_open_api import Client, EndPoints, Protobuf
 from ctrader_open_api.messages.OpenApiCommonMessages_pb2 import ProtoHeartbeatEvent
 from ctrader_open_api.messages.OpenApiMessages_pb2 import (
+    ProtoOAApplicationAuthReq,
+    ProtoOAApplicationAuthRes,
     ProtoOAErrorRes,
     ProtoOAGetAccountListByAccessTokenReq,
     ProtoOAGetAccountListByAccessTokenRes,
@@ -19,15 +21,22 @@ def get_protobuf_port() -> int:
 
 
 def main() -> None:
+    client_id = os.getenv("CTRADER_CLIENT_ID", "").strip()
+    client_secret = os.getenv("CTRADER_CLIENT_SECRET", "").strip()
     access_token = os.getenv("CTRADER_ACCESS_TOKEN", "").strip()
-    if not access_token:
-        print("CTRADER_ACCESS_TOKEN غير موجود.")
+
+    if not (client_id and client_secret and access_token):
+        print("أحد متغيرات Client ID أو Client Secret أو Access Token غير موجود.")
         return
 
     client = Client(EndPoints.PROTOBUF_DEMO_HOST, get_protobuf_port(), TcpProtocol)
     heartbeat = task.LoopingCall(lambda: client.send(ProtoHeartbeatEvent()))
+    state = {"done": False}
 
     def stop_soon(msg: str) -> None:
+        if state["done"]:
+            return
+        state["done"] = True
         print(msg)
         if heartbeat.running:
             heartbeat.stop()
@@ -38,6 +47,11 @@ def main() -> None:
         if msg.payloadType == ProtoOAErrorRes().payloadType:
             err = Protobuf.extract(msg)
             stop_soon(f"خطأ [{err.errorCode}]: {err.description}")
+        elif msg.payloadType == ProtoOAApplicationAuthRes().payloadType:
+            print("تم توثيق التطبيق. جاري جلب قائمة الحسابات المرتبطة بالتوكن...")
+            req = ProtoOAGetAccountListByAccessTokenReq()
+            req.accessToken = access_token
+            client.send(req)
         elif msg.payloadType == ProtoOAGetAccountListByAccessTokenRes().payloadType:
             res = Protobuf.extract(msg)
             print("الحسابات المرتبطة بهذا Access Token:")
@@ -49,12 +63,13 @@ def main() -> None:
             stop_soon("انتهى جلب قائمة الحسابات.")
 
     def on_connected(_client) -> None:
-        print("تم الاتصال بخادم cTrader. جاري جلب قائمة الحسابات...")
+        print("تم الاتصال بخادم cTrader. جاري توثيق التطبيق...")
         if not heartbeat.running:
             heartbeat.start(25, now=False)
-        req = ProtoOAGetAccountListByAccessTokenReq()
-        req.accessToken = access_token
-        client.send(req)
+        app_req = ProtoOAApplicationAuthReq()
+        app_req.clientId = client_id
+        app_req.clientSecret = client_secret
+        client.send(app_req)
 
     def on_disconnected(_client, reason) -> None:
         stop_soon(f"انقطع الاتصال: {reason}")
