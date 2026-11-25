@@ -7,11 +7,11 @@ GROQ_API_KEY = "PLACEHOLDER_KEY"
 LOT_SIZE = 0.01
 
 PORTFOLIO = [
-    {"name": "EURUSD", "symbol": "EURUSD-X", "strategy": "ENSEMBLE_30_100_RSI21", "unit": 0.0001, "sl": 30, "tp": 60},
-    {"name": "GBPUSD", "symbol": "GBPUSD-X", "strategy": "SMA_30_100", "unit": 0.0001, "sl": 35, "tp": 70},
-    {"name": "GBPJPY", "symbol": "GBPJPY-X", "strategy": "SMA_20_50", "unit": 0.01, "sl": 40, "tp": 80},
+    {"name": "EURUSD", "symbol": "EURUSD=X", "strategy": "ENSEMBLE_30_100_RSI21", "unit": 0.0001, "sl": 30, "tp": 60},
+    {"name": "GBPUSD", "symbol": "GBPUSD=X", "strategy": "SMA_30_100", "unit": 0.0001, "sl": 35, "tp": 70},
+    {"name": "GBPJPY", "symbol": "GBPJPY=X", "strategy": "SMA_20_50", "unit": 0.01, "sl": 40, "tp": 80},
     {"name": "GOLD", "symbol": "GC=F", "strategy": "SMA_20_50", "unit": 1.0, "sl": 20, "tp": 40},
-    {"name": "BITCOIN", "symbol": "BTC-USD", "strategy": "SMA_50_200", "unit": 1.0, "sl": 1500, "tp": 3000}
+    {"name": "BTCUSD", "symbol": "BTC-USD", "strategy": "SMA_50_200", "unit": 1.0, "sl": 1500, "tp": 3000}
 ]
 
 def fetch_live_candles(symbol):
