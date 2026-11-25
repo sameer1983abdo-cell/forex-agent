@@ -1,10 +1,10 @@
 {
-  "signal_id": "1795571999",
+  "signal_id": "1795596385",
   "signal": {
-    "id": "1795571999",
-    "asset": "GOLD",
-    "action": "SELL",
-    "sl_pips": 20,
-    "tp_pips": 40
+    "id": "1795596385",
+    "asset": "EURUSD",
+    "action": "BUY",
+    "sl_pips": 30,
+    "tp_pips": 60
   }
 }
