@@ -1,174 +1,206 @@
 import hashlib
 import json
 import os
-import sys
-from pathlib import Path
+import time
+from datetime import datetime, timezone
 from typing import Any
 
-SIGNAL_FILE = Path(os.getenv("SIGNAL_FILE", "signal.json"))
-STATE_FILE = Path(os.getenv("LAST_SIGNAL_FILE", "last_executed_signal.json"))
+SIGNAL_FILE = os.getenv("SIGNAL_FILE", "signal.json")
+STATE_FILE = os.getenv("LAST_SIGNAL_FILE", "last_executed_signal.json")
+COOLDOWN_MINUTES = int(os.getenv("COOLDOWN_MINUTES", "120"))
+MAX_PER_SYMBOL = int(os.getenv("MAX_PER_SYMBOL", "1"))
 
 
-def _clean_str(value: Any) -> str:
-    if value is None:
-        return ""
-    return str(value).strip()
-
-
-def _clean_float(value: Any) -> float | None:
-    if value is None or value == "":
-        return None
+def load_json(path: str, default: dict[str, Any]) -> dict[str, Any]:
+    if not os.path.exists(path):
+        return dict(default)
     try:
-        return float(value)
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else dict(default)
+    except Exception:
+        return dict(default)
+
+
+def save_json(path: str, data: dict[str, Any]) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+
+def normalize_signal(raw: dict[str, Any]) -> dict[str, Any]:
+    signal_id = str(raw.get("id") or raw.get("signal_id") or "").strip()
+    symbol_name = str(
+        raw.get("symbol_name") or raw.get("asset") or raw.get("symbol") or ""
+    ).strip().upper()
+    trade_side = str(
+        raw.get("trade_side") or raw.get("action") or raw.get("side") or ""
+    ).strip().upper()
+
+    lots_val = raw.get("lots", 0.01)
+    try:
+        lots = float(lots_val) if lots_val is not None else 0.01
     except (TypeError, ValueError):
-        return None
+        lots = 0.01
 
-
-def load_signal(path: Path = SIGNAL_FILE) -> dict[str, Any]:
-    if not path.exists():
-        raise FileNotFoundError(f"ملف الإشارة غير موجود: {path}")
-
-    raw_content = path.read_text(encoding="utf-8").strip()
-    if not raw_content:
-        raise ValueError("ملف الإشارة فارغ.")
-
-    try:
-        data = json.loads(raw_content)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"صيغة JSON في ملف الإشارة غير صالحة: {exc}") from exc
-
-    if not isinstance(data, dict):
-        raise ValueError("محتوى ملف الإشارة يجب أن يكون كائن JSON.")
-
-    symbol_raw = (
-        data.get("symbol_name")
-        or data.get("asset")
-        or data.get("symbol")
-    )
-    side_raw = (
-        data.get("trade_side")
-        or data.get("action")
-        or data.get("side")
-    )
-
-    symbol_name = _clean_str(symbol_raw).upper()
-    trade_side = _clean_str(side_raw).upper()
-
-    if not symbol_name or not trade_side:
-        raise ValueError("بيانات الإشارة ناقصة (symbol_name أو trade_side مفقود).")
-
-    if trade_side not in ("BUY", "SELL"):
-        raise ValueError(f"اتجاه الصفقة غير مدعوم: {trade_side}")
-
-    signal_id = _clean_str(data.get("id") or data.get("signal_id"))
-    sl_pips = _clean_float(data.get("sl_pips") if "sl_pips" in data else data.get("stop_loss_pips"))
-    tp_pips = _clean_float(data.get("tp_pips") if "tp_pips" in data else data.get("take_profit_pips"))
+    sl_pips = raw.get("sl_pips", 30)
+    tp_pips = raw.get("tp_pips", 60)
 
     normalized: dict[str, Any] = {
         "id": signal_id,
         "symbol_name": symbol_name,
         "trade_side": trade_side,
+        "lots": lots,
         "sl_pips": sl_pips,
         "tp_pips": tp_pips,
     }
 
-    fingerprint_source = json.dumps(normalized, sort_keys=True, ensure_ascii=False)
-    normalized["fingerprint"] = hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()
+    fingerprint_payload = json.dumps(normalized, sort_keys=True, ensure_ascii=False)
+    normalized["fingerprint"] = hashlib.sha256(
+        fingerprint_payload.encode("utf-8")
+    ).hexdigest()
     return normalized
 
 
-def read_last_executed(path: Path = STATE_FILE) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        content = json.loads(path.read_text(encoding="utf-8"))
-        return content if isinstance(content, dict) else {}
-    except Exception:
-        return {}
+def load_state(path: str = STATE_FILE) -> dict[str, Any]:
+    state = load_json(path, {"executed_ids": [], "fingerprints": [], "recent_trades": []})
+    state.setdefault("executed_ids", [])
+    state.setdefault("fingerprints", [])
+    state.setdefault("recent_trades", [])
+    return state
 
 
-def write_last_executed(signal_data: dict[str, Any], path: Path = STATE_FILE) -> None:
-    payload = {
-        "id": signal_data.get("id", ""),
-        "symbol_name": signal_data["symbol_name"],
-        "trade_side": signal_data["trade_side"],
-        "sl_pips": signal_data.get("sl_pips"),
-        "tp_pips": signal_data.get("tp_pips"),
-        "fingerprint": signal_data["fingerprint"],
-    }
-    path.write_text(
-        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+def save_state(state: dict[str, Any], path: str = STATE_FILE) -> None:
+    state["executed_ids"] = state.get("executed_ids", [])[-200:]
+    state["fingerprints"] = state.get("fingerprints", [])[-200:]
+    state["recent_trades"] = state.get("recent_trades", [])[-100:]
+    save_json(path, state)
 
 
-def send_order_to_ctrader(signal_data: dict[str, Any]) -> bool:
-    """
-    مكان إرسال الأمر الفعلي إلى حساب cTrader التجريبي.
-    إذا كانت CTRADER_DRY_RUN مفعّلة (1 أو true)، يطبع الأمر دون إرسال فعلي.
-    """
-    dry_run = _clean_str(os.getenv("CTRADER_DRY_RUN", "")).lower() in ("1", "true", "yes")
-    client_id = _clean_str(os.getenv("CTRADER_CLIENT_ID"))
-    client_secret = _clean_str(os.getenv("CTRADER_CLIENT_SECRET"))
-    access_token = _clean_str(os.getenv("CTRADER_ACCESS_TOKEN"))
-    account_id = _clean_str(os.getenv("CTRADER_ACCOUNT_ID"))
-
-    print(
-        f"تجهيز أمر التداول -> الحساب: {account_id or 'غير محدد'} | "
-        f"الزوج: {signal_data['symbol_name']} | الاتجاه: {signal_data['trade_side']} | "
-        f"SL: {signal_data['sl_pips']} | TP: {signal_data['tp_pips']}"
-    )
-
-    if dry_run:
-        print("وضع الاختبار (CTRADER_DRY_RUN) مفعّل: تم محاكاة التنفيذ بنجاح.")
-        return True
-
-    if not all([client_id, client_secret, access_token, account_id]):
-        raise EnvironmentError(
-            "متغيرات بيئة cTrader ناقصة (CTRADER_CLIENT_ID / CTRADER_CLIENT_SECRET / "
-            "CTRADER_ACCESS_TOKEN / CTRADER_ACCOUNT_ID)."
-        )
-
-    # هنا تضع استدعاء عميل cTrader API أو خدمة التنفيذ الخاصة بك لإرسال الأمر.
-    # في حال عدم ربط استدعاء Open API بعد، نُبقي الأمر واضحاً ولا نسجله كمنفّذ فعلياً.
-    print("تنبيه: لم يتم ربط استدعاء إرسال الأمر الفعلي بـ cTrader API بعد في دالة send_order_to_ctrader.")
-    return False
-
-
-def main() -> int:
-    print("بدء فحص ملف الإشارات السحابية...")
-
-    try:
-        signal_data = load_signal(SIGNAL_FILE)
-    except Exception as exc:
-        print(f"تعذر قراءة الإشارة: {exc}")
-        return 1
-
-    print(
-        f"تمت قراءة الإشارة بنجاح: id={signal_data['id']} | "
-        f"symbol_name={signal_data['symbol_name']} | trade_side={signal_data['trade_side']} | "
-        f"sl_pips={signal_data['sl_pips']} | tp_pips={signal_data['tp_pips']}"
-    )
-
-    last_state = read_last_executed(STATE_FILE)
-    if last_state.get("fingerprint") == signal_data["fingerprint"]:
-        print("تم تجاهل الإشارة: مطابقة لآخر إشارة منفذة (SHA-256 متطابق).")
-        return 0
-
-    try:
-        executed = send_order_to_ctrader(signal_data)
-    except Exception as exc:
-        print(f"فشل أثناء تنفيذ الصفقة: {exc}")
-        return 1
-
-    if executed:
-        write_last_executed(signal_data, STATE_FILE)
-        print(f"تم حفظ حالة التنفيذ بنجاح في {STATE_FILE}.")
-    else:
-        print("لم يتم اعتماد الصفقة كمنفّذة؛ لم يتم تحديث last_executed_signal.json.")
-
+def count_open_positions(symbol: str) -> int:
+    # إذا كنت تجلب المراكز المفتوحة من cTrader، أعد عدد الصفقات المفتوحة لهذا الرمز هنا
     return 0
 
 
+def check_signal_allowed(signal: dict[str, Any], state: dict[str, Any]) -> tuple[bool, str]:
+    signal_id = signal.get("id", "")
+    symbol = signal.get("symbol_name", "")
+    side = signal.get("trade_side", "")
+    fingerprint = signal.get("fingerprint", "")
+
+    if not symbol or not side:
+        return False, "بيانات الإشارة ناقصة (symbol_name/asset أو trade_side/action مفقود)."
+
+    if side not in ("BUY", "SELL"):
+        return False, f"اتجاه صفقة غير مدعوم: {side}"
+
+    open_count = count_open_positions(symbol)
+    if open_count >= MAX_PER_SYMBOL:
+        return False, f"تم الوصول للحد الأقصى ({MAX_PER_SYMBOL}) للصفقات المفتوحة على {symbol}."
+
+    if fingerprint and fingerprint in state["fingerprints"]:
+        return False, "الإشارة مطابقة لبصمة إشارة تم تنفيذها مسبقاً (تخطي لمنع التكرار)."
+
+    if signal_id and signal_id in state["executed_ids"]:
+        return False, f"الإشارة ({signal_id}) تم التعامل معها مسبقاً. تم تجاهل التكرار."
+
+    now_ts = time.time()
+    cooldown_seconds = COOLDOWN_MINUTES * 60
+
+    for item in reversed(state["recent_trades"]):
+        if item.get("symbol") == symbol and item.get("side") == side:
+            elapsed = now_ts - float(item.get("timestamp", 0))
+            if elapsed < cooldown_seconds:
+                remaining = int((cooldown_seconds - elapsed) / 60) + 1
+                return (
+                    False,
+                    f"تم تنفيذ {side} على {symbol} مؤخراً؛ متبقٍ {remaining} دقيقة قبل السماح بصفقة جديدة.",
+                )
+            break
+
+    return True, "الإشارة مسموحة للتنفيذ."
+
+
+def record_trade(
+    signal: dict[str, Any],
+    position_id: str | int | None = None,
+    state_path: str = STATE_FILE,
+) -> None:
+    state = load_state(state_path)
+    signal_id = signal.get("id", "")
+    fingerprint = signal.get("fingerprint", "")
+
+    if signal_id and signal_id not in state["executed_ids"]:
+        state["executed_ids"].append(signal_id)
+
+    if fingerprint and fingerprint not in state["fingerprints"]:
+        state["fingerprints"].append(fingerprint)
+
+    state["recent_trades"].append({
+        "id": signal_id,
+        "symbol": signal.get("symbol_name", ""),
+        "side": signal.get("trade_side", ""),
+        "lots": signal.get("lots"),
+        "sl_pips": signal.get("sl_pips"),
+        "tp_pips": signal.get("tp_pips"),
+        "position_id": position_id,
+        "fingerprint": fingerprint,
+        "timestamp": time.time(),
+        "executed_at_utc": datetime.now(timezone.utc).isoformat(),
+    })
+    save_state(state, state_path)
+
+
+def execute_ctrader_trade(signal: dict[str, Any]) -> str | int | None:
+    """
+    ضع هنا كود إرسال الأمر الفعلي إلى cTrader وأعد position_id عند نجاح التنفيذ.
+    في حال عدم وجود ربط فعلي بعد، أعد None حتى لا تُسجَّل الصفقة كمنفّذة.
+    """
+    symbol = signal["symbol_name"]
+    side = signal["trade_side"]
+    lots = signal["lots"]
+    sl_pips = signal["sl_pips"]
+    tp_pips = signal["tp_pips"]
+
+    client_id = os.getenv("CTRADER_CLIENT_ID", "").strip()
+    client_secret = os.getenv("CTRADER_CLIENT_SECRET", "").strip()
+    access_token = os.getenv("CTRADER_ACCESS_TOKEN", "").strip()
+    account_id = os.getenv("CTRADER_ACCOUNT_ID", "").strip()
+
+    if not all([client_id, client_secret, access_token, account_id]):
+        print("تحذير: متغيرات بيئة cTrader غير مكتملة.")
+        return None
+
+    print(f"تنفيذ أمر {side} على {symbol} بحجم {lots} (SL={sl_pips}, TP={tp_pips})")
+    # TODO: أضف هنا كود الاتصال وإرسال الأمر إلى cTrader وأعد position_id الفعلي
+    return None
+
+
+def main() -> None:
+    print("بدء فحص ملف الإشارات السحابية...")
+    raw_signal = load_json(SIGNAL_FILE, {})
+    if not raw_signal:
+        print("لا توجد إشارة في signal.json.")
+        return
+
+    signal = normalize_signal(raw_signal)
+    state = load_state(STATE_FILE)
+
+    allowed, reason = check_signal_allowed(signal, state)
+    if not allowed:
+        print(reason)
+        return
+
+    print("إشارة جديدة جاهزة:")
+    print(json.dumps(signal, indent=2, ensure_ascii=False))
+
+    position_id = execute_ctrader_trade(signal)
+    if position_id is not None:
+        record_trade(signal, position_id=position_id, state_path=STATE_FILE)
+        print(f"تم حفظ حالة الإشارة بنجاح. رقم الصفقة: {position_id}")
+    else:
+        print("لم يتم إرجاع رقم صفقة من cTrader؛ لم يتم تحديث last_executed_signal.json.")
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
