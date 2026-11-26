@@ -1,7 +1,7 @@
 {
-    "id": "1795711531",
-    "asset": "EURUSD",
+    "id": "1795711837",
+    "asset": "BTCUSD",
     "action": "BUY",
-    "sl_pips": 30,
-    "tp_pips": 60
+    "sl_pips": 1500,
+    "tp_pips": 3000
 }
