@@ -81,7 +81,6 @@ def load_strategy_config(path: str = CONFIG_FILE) -> dict[str, Any]:
 
 
 def fetch_signal_data() -> dict[str, Any]:
-    # في GitHub Actions يكون signal.json محدّثاً في المستودع؛ وإن لم يوجد نجلبه من الرابط الخام
     if os.path.exists(SIGNAL_FILE):
         local_data = load_json_file(SIGNAL_FILE, {})
         if local_data:
@@ -243,9 +242,40 @@ def calculate_api_volume(
     return vol
 
 
+def calculate_sl_tp_price_distances(
+    symbol_name: str,
+    pip_position: int,
+    sl_pips: float,
+    tp_pips: float,
+) -> tuple[float, float]:
+    symbol_upper = symbol_name.strip().upper()
+    sl_val = max(0.0, float(sl_pips))
+    tp_val = max(0.0, float(tp_pips))
+
+    if "BTC" in symbol_upper:
+        # في البيتكوين غالباً تمثل القيمة فرق سعر مباشر بالدولار أو نقاط بـ 0.01
+        sl_dist = sl_val if sl_val >= 50.0 else sl_val * 10.0
+        tp_dist = tp_val if tp_val >= 50.0 else tp_val * 10.0
+        return sl_dist, tp_dist
+
+    if "XAU" in symbol_upper or "GOLD" in symbol_upper:
+        # في الذهب غالباً 1 دولار = 100 نقطة (pipPosition=2 -> 0.01، أو 0.10 حسب الوسيط)
+        pip_size = 10 ** (-pip_position) if pip_position > 0 else 0.01
+        return sl_val * pip_size, tp_val * pip_size
+
+    pip_size = 10 ** (-pip_position)
+    return sl_val * pip_size, tp_val * pip_size
+
+
 def execute_on_ctrader_demo(
     order_info: dict[str, Any], creds: dict[str, Any]
 ) -> tuple[bool, str | int | None]:
+    default_pip_pos = (
+        4
+        if len(order_info["symbol_name"]) == 6
+        and "JPY" not in order_info["symbol_name"]
+        else 2
+    )
     state: dict[str, Any] = {
         "done": False,
         "success": False,
@@ -254,7 +284,7 @@ def execute_on_ctrader_demo(
         "order_sent": False,
         "symbol_id": None,
         "symbol_name": order_info["symbol_name"],
-        "pip_position": 4 if len(order_info["symbol_name"]) == 6 and "JPY" not in order_info["symbol_name"] else 2,
+        "pip_position": default_pip_pos,
         "lot_size": 100000,
         "min_volume": 100,
         "step_volume": 100,
@@ -290,11 +320,15 @@ def execute_on_ctrader_demo(
             state["min_volume"],
             state["step_volume"],
         )
-        pip_size = 10 ** (-state["pip_position"])
-        sl_price_dist = float(order_info["sl_pips"]) * pip_size
-        tp_price_dist = float(order_info["tp_pips"]) * pip_size
-        sl_rel = int(round(sl_price_dist * CTRADER_PRICE_SCALE))
-        tp_rel = int(round(tp_price_dist * CTRADER_PRICE_SCALE))
+
+        sl_price_dist, tp_price_dist = calculate_sl_tp_price_distances(
+            symbol_name=state["symbol_name"],
+            pip_position=state["pip_position"],
+            sl_pips=float(order_info["sl_pips"]),
+            tp_pips=float(order_info["tp_pips"]),
+        )
+        sl_rel = max(0, int(round(sl_price_dist * CTRADER_PRICE_SCALE)))
+        tp_rel = max(0, int(round(tp_price_dist * CTRADER_PRICE_SCALE)))
 
         order_req = ProtoOANewOrderReq()
         order_req.ctidTraderAccountId = creds["account_id"]
@@ -312,7 +346,8 @@ def execute_on_ctrader_demo(
         print(
             f"إرسال أمر {order_info['trade_side']} للرمز {state['symbol_name']} "
             f"(ID: {state['symbol_id']}) بعدد لوتات {order_info['lots']} "
-            f"(cTrader volume={api_volume}, relativeSL={sl_rel}, relativeTP={tp_rel})..."
+            f"(cTrader volume={api_volume}, sl_price_dist={sl_price_dist}, "
+            f"tp_price_dist={tp_price_dist}, relativeSL={sl_rel}, relativeTP={tp_rel})..."
         )
         client.send(order_req)
 
@@ -385,7 +420,7 @@ def execute_on_ctrader_demo(
             res = Protobuf.extract(msg)
             if res.symbol:
                 sym = res.symbol[0]
-                if getattr(sym, "pipPosition", None):
+                if getattr(sym, "pipPosition", None) is not None:
                     state["pip_position"] = int(sym.pipPosition)
                 if getattr(sym, "lotSize", None):
                     state["lot_size"] = int(sym.lotSize)
