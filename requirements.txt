@@ -2,3 +2,4 @@ urllib3
 ctrader-open-api
 Twisted
 protobuf
+service_identity
