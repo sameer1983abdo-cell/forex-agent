@@ -6,5 +6,27 @@
     "action": "BUY",
     "sl_pips": 30,
     "tp_pips": 60
-  }
+  },
+  "executed_ids": [
+    "1795710642"
+  ],
+  "executed_fingerprints": [
+    "18c08a68678b1caa404264e48f3a7c503b22282ddcadfe5fe518ad5b6e8e5baa"
+  ],
+  "recent_trades": [
+    {
+      "signal_id": "1795710642",
+      "symbol": "EURUSD",
+      "side": "BUY",
+      "lots": 0.01,
+      "sl_pips": 30,
+      "tp_pips": 60,
+      "position_id": "45517529",
+      "fingerprint": "18c08a68678b1caa404264e48f3a7c503b22282ddcadfe5fe518ad5b6e8e5baa",
+      "timestamp": 1795711225.1705778,
+      "executed_at_utc": "2026-11-26T16:40:25.170580+00:00"
+    }
+  ],
+  "last_signal_id": "1795710642",
+  "last_fingerprint": "18c08a68678b1caa404264e48f3a7c503b22282ddcadfe5fe518ad5b6e8e5baa"
 }
