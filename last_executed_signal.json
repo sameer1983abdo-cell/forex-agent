@@ -9,11 +9,13 @@
   },
   "executed_ids": [
     "1795710642",
-    "1795711837"
+    "1795711837",
+    "1795719644"
   ],
   "executed_fingerprints": [
     "18c08a68678b1caa404264e48f3a7c503b22282ddcadfe5fe518ad5b6e8e5baa",
-    "351112c57f253e824ae77ddd3dd26eae0aa027b4c5baa2ec10b7180c512259d6"
+    "351112c57f253e824ae77ddd3dd26eae0aa027b4c5baa2ec10b7180c512259d6",
+    "9a82891f6c4f63dd226adfe495381462da6c78fcc3a8c1e77250b1d28876fef5"
   ],
   "recent_trades": [
     {
@@ -39,8 +41,20 @@
       "fingerprint": "351112c57f253e824ae77ddd3dd26eae0aa027b4c5baa2ec10b7180c512259d6",
       "timestamp": 1795711842.9803824,
       "executed_at_utc": "2026-11-26T16:50:42.980386+00:00"
+    },
+    {
+      "signal_id": "1795719644",
+      "symbol": "BTCUSD",
+      "side": "BUY",
+      "lots": 0.01,
+      "sl_pips": 1500,
+      "tp_pips": 3000,
+      "position_id": "45517678",
+      "fingerprint": "9a82891f6c4f63dd226adfe495381462da6c78fcc3a8c1e77250b1d28876fef5",
+      "timestamp": 1795719650.6413486,
+      "executed_at_utc": "2026-11-26T19:00:50.641352+00:00"
     }
   ],
-  "last_signal_id": "1795711837",
-  "last_fingerprint": "351112c57f253e824ae77ddd3dd26eae0aa027b4c5baa2ec10b7180c512259d6"
+  "last_signal_id": "1795719644",
+  "last_fingerprint": "9a82891f6c4f63dd226adfe495381462da6c78fcc3a8c1e77250b1d28876fef5"
 }
