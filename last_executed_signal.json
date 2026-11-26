@@ -1,7 +1,7 @@
 {
-  "signal_id": "1795662571",
+  "signal_id": "1795663913",
   "signal": {
-    "id": "1795662571",
+    "id": "1795663913",
     "asset": "EURUSD",
     "action": "BUY",
     "sl_pips": 30,
