@@ -23,7 +23,8 @@
     "1795788932",
     "1795796131",
     "1795797933",
-    "1795804239"
+    "1795804239",
+    "1795806933"
   ],
   "executed_fingerprints": [
     "18c08a68678b1caa404264e48f3a7c503b22282ddcadfe5fe518ad5b6e8e5baa",
@@ -41,7 +42,8 @@
     "8b6582744aa28763b82021c0fcde1a7913e9fbd45ae56b2458ae7255aa94e1bd",
     "157acbdef47507ca82f0ed54046da33611466716d7d48d2588a19a99f71e938d",
     "b1c16f3d9bf7f2baf83b5ceaa658e946a9c343086ad424849a4e9cdef1c8cdb0",
-    "5d065e8b73b2291e08205f94c6afbf661f5abbec63da130bab81ae22c014ebcd"
+    "5d065e8b73b2291e08205f94c6afbf661f5abbec63da130bab81ae22c014ebcd",
+    "a3a56adcb86fc222a662fec98d1a13ce97152563c2eb97a1ddc70431c5d3ae53"
   ],
   "recent_trades": [
     {
@@ -235,8 +237,20 @@
       "fingerprint": "5d065e8b73b2291e08205f94c6afbf661f5abbec63da130bab81ae22c014ebcd",
       "timestamp": 1795804244.8481064,
       "executed_at_utc": "2026-11-27T18:30:44.848110+00:00"
+    },
+    {
+      "signal_id": "1795806933",
+      "symbol": "XAUUSD",
+      "side": "BUY",
+      "lots": 0.01,
+      "sl_pips": 20,
+      "tp_pips": 40,
+      "position_id": "45521777",
+      "fingerprint": "a3a56adcb86fc222a662fec98d1a13ce97152563c2eb97a1ddc70431c5d3ae53",
+      "timestamp": 1795806939.5412757,
+      "executed_at_utc": "2026-11-27T19:15:39.541279+00:00"
     }
   ],
-  "last_signal_id": "1795804239",
-  "last_fingerprint": "5d065e8b73b2291e08205f94c6afbf661f5abbec63da130bab81ae22c014ebcd"
+  "last_signal_id": "1795806933",
+  "last_fingerprint": "a3a56adcb86fc222a662fec98d1a13ce97152563c2eb97a1ddc70431c5d3ae53"
 }
