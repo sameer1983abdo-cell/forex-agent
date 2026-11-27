@@ -20,7 +20,8 @@
     "1795772728",
     "1795779933",
     "1795785331",
-    "1795788932"
+    "1795788932",
+    "1795796131"
   ],
   "executed_fingerprints": [
     "18c08a68678b1caa404264e48f3a7c503b22282ddcadfe5fe518ad5b6e8e5baa",
@@ -35,7 +36,8 @@
     "976d449a704c86984012d748d0f5dde51931f69fc594ec309d6fb0a0e01d9836",
     "68a9bc2c4ad0c31af8b0b671d1f07ef06e293f22f430e0e456959e43da003812",
     "24378b6cb39d5a9b233a7a4dd5b4506741b27b1592bc8e5499fe71ed1f3dc9c2",
-    "8b6582744aa28763b82021c0fcde1a7913e9fbd45ae56b2458ae7255aa94e1bd"
+    "8b6582744aa28763b82021c0fcde1a7913e9fbd45ae56b2458ae7255aa94e1bd",
+    "157acbdef47507ca82f0ed54046da33611466716d7d48d2588a19a99f71e938d"
   ],
   "recent_trades": [
     {
@@ -193,8 +195,20 @@
       "fingerprint": "8b6582744aa28763b82021c0fcde1a7913e9fbd45ae56b2458ae7255aa94e1bd",
       "timestamp": 1795788938.0037465,
       "executed_at_utc": "2026-11-27T14:15:38.003750+00:00"
+    },
+    {
+      "signal_id": "1795796131",
+      "symbol": "BTCUSD",
+      "side": "BUY",
+      "lots": 0.01,
+      "sl_pips": 1500,
+      "tp_pips": 3000,
+      "position_id": "45521527",
+      "fingerprint": "157acbdef47507ca82f0ed54046da33611466716d7d48d2588a19a99f71e938d",
+      "timestamp": 1795796157.8602457,
+      "executed_at_utc": "2026-11-27T16:15:57.860249+00:00"
     }
   ],
-  "last_signal_id": "1795788932",
-  "last_fingerprint": "8b6582744aa28763b82021c0fcde1a7913e9fbd45ae56b2458ae7255aa94e1bd"
+  "last_signal_id": "1795796131",
+  "last_fingerprint": "157acbdef47507ca82f0ed54046da33611466716d7d48d2588a19a99f71e938d"
 }
