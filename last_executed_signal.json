@@ -18,7 +18,8 @@
     "1795757437",
     "1795764640",
     "1795772728",
-    "1795779933"
+    "1795779933",
+    "1795785331"
   ],
   "executed_fingerprints": [
     "18c08a68678b1caa404264e48f3a7c503b22282ddcadfe5fe518ad5b6e8e5baa",
@@ -31,7 +32,8 @@
     "06f82c4f82193d66e3408f550a0be0cd4aaeec3159579ce2d11928a8c5113381",
     "adf3a00441d3f40f4993c12afd168e5f57657c9c9c57f9f31ab9e41b4d00d91e",
     "976d449a704c86984012d748d0f5dde51931f69fc594ec309d6fb0a0e01d9836",
-    "68a9bc2c4ad0c31af8b0b671d1f07ef06e293f22f430e0e456959e43da003812"
+    "68a9bc2c4ad0c31af8b0b671d1f07ef06e293f22f430e0e456959e43da003812",
+    "24378b6cb39d5a9b233a7a4dd5b4506741b27b1592bc8e5499fe71ed1f3dc9c2"
   ],
   "recent_trades": [
     {
@@ -165,8 +167,20 @@
       "fingerprint": "68a9bc2c4ad0c31af8b0b671d1f07ef06e293f22f430e0e456959e43da003812",
       "timestamp": 1795779958.6551702,
       "executed_at_utc": "2026-11-27T11:45:58.655173+00:00"
+    },
+    {
+      "signal_id": "1795785331",
+      "symbol": "EURUSD",
+      "side": "SELL",
+      "lots": 0.01,
+      "sl_pips": 30,
+      "tp_pips": 60,
+      "position_id": "45521001",
+      "fingerprint": "24378b6cb39d5a9b233a7a4dd5b4506741b27b1592bc8e5499fe71ed1f3dc9c2",
+      "timestamp": 1795785337.6492057,
+      "executed_at_utc": "2026-11-27T13:15:37.649208+00:00"
     }
   ],
-  "last_signal_id": "1795779933",
-  "last_fingerprint": "68a9bc2c4ad0c31af8b0b671d1f07ef06e293f22f430e0e456959e43da003812"
+  "last_signal_id": "1795785331",
+  "last_fingerprint": "24378b6cb39d5a9b233a7a4dd5b4506741b27b1592bc8e5499fe71ed1f3dc9c2"
 }
