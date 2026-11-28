@@ -1,7 +1,7 @@
 {
-    "id": "1795827647",
-    "asset": "XAUUSD",
-    "action": "BUY",
-    "sl_pips": 20,
-    "tp_pips": 40
+    "id": "1795828527",
+    "asset": "BTCUSD",
+    "action": "SELL",
+    "sl_pips": 1500,
+    "tp_pips": 3000
 }
